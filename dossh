@@ -1,0 +1,68 @@
+#!/bin/bash
+
+# Check for do token. Prompt if the env var doesnt exist.
+if [ -z $DIGITALOCEAN_ACCESS_TOKEN ];
+then
+    echo "Please input your Digitalocean access token:"
+    read -s DIGITALOCEAN_ACCESS_TOKEN
+fi
+
+echo "Which droplet tag are you searching for?"
+read droplet_type
+
+# check the search term is > 3 chars
+while [ "${#droplet_type}" -lt "3" ];
+do
+    echo "A minimum of 3 characters is required. Please try again."
+    read droplet_type
+done
+
+# Convert to lowercase
+droplet_type=`echo "$droplet_type" | awk '{print tolower($0)}'`
+
+echo "Looking up droplets ..."
+
+droplets=`curl -s -X GET \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer $DIGITALOCEAN_ACCESS_TOKEN" \
+  "https://api.digitalocean.com/v2/droplets?page=1&per_page=200" | jq -r '[.droplets[] | select (.tags[] | ascii_downcase | test('\"$droplet_type\"')) | {name: .name, ip: (.networks.v4[] | select(.type == "private")).ip_address}] | unique_by(.name) | .[]'`
+
+if [ -z "$droplets" ];
+then
+    echo "Sorry! No droplets found matching a tag like $droplet_type. Please try again"
+    exit 1
+fi
+
+droplet_names=`echo $droplets | jq -r '.name'`
+
+options=($droplet_names)
+
+droplet_ssh () {
+    # hostname
+    # droplets
+    droplet_ip=`echo $2 | jq -r '. | select(.name == '\"$1\"') | .ip'`
+    
+    echo "Attempting to authenticate and connect to: $1. Please press Allow in your browser"
+    ssh $droplet_ip
+}
+
+if [ ${#options[@]} == 1 ];
+then
+    opt=${options[0]}
+    echo "Found 1 droplet matching $opt"
+    droplet_ssh $opt "$droplets"
+    exit 1
+else
+    PS3='Please enter your choice: '
+    select opt in "${options[@]}"
+    do
+    case $opt in
+        "Exit")
+        echo "Exiting..."
+        break;;
+    esac
+
+    droplet_ssh $opt "$droplets"
+    exit 1
+    done
+fi
