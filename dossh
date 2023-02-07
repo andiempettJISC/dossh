@@ -1,5 +1,37 @@
 #!/bin/bash
 
+Ending() {
+    echo
+    echo "Closing"
+    exit 0
+}
+
+trap Ending SIGTERM SIGINT
+
+Help()
+{
+   # Display Help
+   echo
+   echo "A simple interactive CLI utility to lookup existing digitalocean droplets and initialise and SSH session."
+   echo
+   echo "Syntax: dossh [-f <localport:remoteport>]"
+   echo "options:"
+   echo "f      [optional] Specify the local and remote port to setup port forwarding"
+   echo
+   exit 1
+}
+
+while getopts f:h flag
+do
+    case "${flag}" in
+        f) port=${OPTARG};;
+        h) # display Help
+          Help
+          exit 1;;
+        *) Help;;
+    esac
+done
+
 # Check for do token. Prompt if the env var doesnt exist.
 if [ -z $DIGITALOCEAN_ACCESS_TOKEN ];
 then
@@ -43,7 +75,15 @@ droplet_ssh () {
     droplet_ip=`echo $2 | jq -r '. | select(.name == '\"$1\"') | .ip'`
     
     echo "Attempting to authenticate and connect to: $1. Please press Allow in your browser"
-    ssh $droplet_ip
+    if [[ ! -z  "$port" ]];
+    then
+        forwardports=(${port//:/ })
+        echo "Forwarding remote port: ${forwardports[1]} to local port: ${forwardports[0]}"
+        echo "Do Not close the session or connectivity will be lost!"
+        ssh -N -L ${forwardports[0]}:localhost:${forwardports[1]} $droplet_ip 
+    else
+        ssh $droplet_ip
+    fi
 }
 
 if [ ${#options[@]} == 1 ];
