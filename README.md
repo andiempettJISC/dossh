@@ -15,9 +15,9 @@ brew install dossh
 dossh [-f <localport:remoteport>]
 ```
 
-### Enviroment variabled
+### Enviroment variables
 
-| Env var                   | Optional | Description                                   |
+| Variable                  | Optional | Description                                   |
 |---------------------------|----------|-----------------------------------------------|
 | DIGITALOCEAN_ACCESS_TOKEN | Yes      | The Digitalocean access token for the account |
 
