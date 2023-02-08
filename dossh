@@ -12,19 +12,23 @@ Help()
 {
    # Display Help
    echo
-   echo "A simple interactive CLI utility to lookup existing digitalocean droplets and initialise and SSH session."
+   echo "A simple interactive CLI utility to lookup existing digitalocean droplets and start an SSH session."
    echo
-   echo "Syntax: dossh [-f <localport:remoteport>]"
+   echo "Syntax: dossh [-f <localport:remoteport>] [-s username] [-u username]"
    echo "options:"
    echo "f      [optional] Specify the local and remote port to setup port forwarding"
+   echo "s      [optional] Switch to an existing user on the droplet"
+   echo "u      [optional] Specify the username to start the ssh session with"
    echo
    exit 1
 }
 
-while getopts f:h flag
+while getopts f:s:u:h flag
 do
     case "${flag}" in
         f) port=${OPTARG};;
+        s) switch_user=${OPTARG};;
+        u) session_user=${OPTARG};;
         h) # display Help
           Help
           exit 1;;
@@ -80,9 +84,30 @@ droplet_ssh () {
         forwardports=(${port//:/ })
         echo "Forwarding remote port: ${forwardports[1]} to local port: ${forwardports[0]}"
         echo "Do Not close the session or connectivity will be lost!"
-        ssh -N -L ${forwardports[0]}:localhost:${forwardports[1]} $droplet_ip 
+        if [[ -z  "$session_user" ]];
+        then
+            ssh -N -L ${forwardports[0]}:localhost:${forwardports[1]} $droplet_ip
+        else
+            ssh -N -L ${forwardports[0]}:localhost:${forwardports[1]} $session_user@$droplet_ip 
+        fi
     else
-        ssh $droplet_ip
+        if [[ -z  "$switch_user" ]];
+        then
+            if [[ -z  "$session_user" ]];
+            then
+                ssh $droplet_ip
+            else
+                ssh $session_user@$droplet_ip
+            fi
+        else
+            if [[ -z  "$session_user" ]];
+            then
+            # Test the user exists then switch to them
+                ssh $droplet_ip -t "if id \"$switch_user\" &>/dev/null; then echo 'User found. Switching to the user $switch_user'; sudo su - $switch_user; else echo 'User $switch_user does not exist'; fi"            
+            else
+                ssh $session_user@$droplet_ip -t "if id \"$switch_user\" &>/dev/null; then echo 'user found'; sudo su - $switch_user; else echo 'user $switch_user does not exist'; fi"            
+            fi
+        fi
     fi
 }
 
